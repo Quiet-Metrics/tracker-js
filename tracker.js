@@ -1,6 +1,7 @@
 /*!
- * WebAnalytics tracker — collecte d'audience sans cookies.
- * Prototype v0 — cible < 2 Ko min+gzip. ES5, aucun build requis.
+ * Affluence wa.js : tracker d'audience sans cookies.
+ * Source de vérité : packages/tracker-js/tracker.js (la copie servie est resynchronisée).
+ * Cible : < 2 Ko min+gzip. ES5, aucun build requis.
  *
  * Aucune donnée n'est stockée chez le visiteur (ni cookie, ni localStorage).
  * Spec du payload : docs/05-api-et-sdk.md
@@ -22,7 +23,7 @@
 
   // L'endpoint est déduit de l'origine du script : servi depuis le domaine
   // du client (copie locale ou proxy first-party), la collecte reste
-  // first-party elle aussi — les listes de blocage par domaine sont inopérantes.
+  // first-party elle aussi : les listes de blocage par domaine sont inopérantes.
   var endpoint = script.getAttribute('data-endpoint') ||
     script.src.replace(/\/[^\/]*$/, '/collect');
 
@@ -42,7 +43,7 @@
   function shouldIgnore() {
     if (win.__waDisable) return true;                    // kill switch manuel
     if (nav.webdriver) return true;                      // navigateurs pilotés
-    if (respectDnt && (nav.doNotTrack === '1' || win.globalPrivacyControl)) return true;
+    if (respectDnt && (nav.doNotTrack === '1' || nav.globalPrivacyControl)) return true;
     if (!devMode && (loc.protocol === 'file:' ||
         /^(localhost$|127\.|0\.0\.0\.0$|192\.168\.|10\.)/.test(loc.hostname))) return true;
     for (var i = 0; i < excluded.length; i++) {
@@ -122,7 +123,7 @@
    * Les appels faits avant le chargement (snippet à file d'attente) sont rejoués.
    */
   var queued = (win.wa && win.wa.q) || [];
-  win.wa = function (name, props) { send('event', name, props); };
+  win.wa = function (name, props) { if (name) send('event', name, props); };
   win.wa.pageview = pageview;
   for (var i = 0; i < queued.length; i++) win.wa.apply(null, queued[i]);
 

@@ -1,48 +1,82 @@
-# @webanalytics/tracker — script navigateur
+# Affluence wa.js : tracker JavaScript
 
-Prototype du script de tracking sans cookies. **Cible : < 2 Ko min+gzip, zéro dépendance, ES5** (pas de build nécessaire, minification `terser` au déploiement).
+Script de mesure d'audience sans cookies pour [Affluence](https://app.affluence.fr), édité par La Boîte à Code. ES5, zéro dépendance, aucun build : un seul fichier, cible < 2 Ko min+gzip.
 
-## Installation (sur le site mesuré)
+## Installation
+
+### Balise script (cas général)
 
 ```html
 <script>window.wa=window.wa||function(){(window.wa.q=window.wa.q||[]).push(arguments)}</script>
-<script defer src="https://collect.example.fr/wa.js" data-site="wa_pub_XXXX"></script>
+<script defer src="https://app.affluence.fr/wa.js" data-site="wa_pub_XXXX"></script>
 ```
 
-La première ligne (file d'attente) permet d'appeler `wa(...)` avant le chargement du script.
+La première ligne installe une file d'attente : tout appel `wa(...)` fait avant le chargement du script est rejoué automatiquement.
 
-## Options (attributs du tag)
+### Copie first-party (anti-adblock)
+
+Copiez `tracker.js` sur votre propre domaine (ou servez-le via le proxy `wa-proxy.php` du package PHP) :
+
+```html
+<script defer src="https://monsite.fr/wa.js" data-site="wa_pub_XXXX"></script>
+```
+
+L'endpoint de collecte est déduit de l'origine du `src` (`…/collect`) : servir le script depuis votre domaine suffit à ce que la collecte passe aussi par votre domaine. Les listes de blocage par nom de domaine deviennent inopérantes.
+
+## Configuration (attributs `data-*` de la balise)
 
 | Attribut | Défaut | Effet |
 |---|---|---|
-| `data-site` | — (requis) | Clé publique du site |
-| `data-endpoint` | déduit du `src` (`…/collect`) | Endpoint de collecte (proxy first-party, etc.) |
-| `data-spa` | `true` | Pages vues automatiques sur `pushState`/`popstate` |
-| `data-hash` | `false` | Routage par `#fragment` (vieilles SPA) |
-| `data-outbound` | `true` | Événement auto « Lien sortant » |
-| `data-exclude` | — | Préfixes de chemins ignorés : `/admin,/preview` |
-| `data-dnt` | off | `respect` → honore Do Not Track / Global Privacy Control |
-| `data-dev` | `false` | Autorise localhost / IP privées (dev) |
+| `data-site` | (requis) | Clé publique du site (`wa_pub_…`) |
+| `data-endpoint` | déduit du `src` (`…/collect`) | URL de collecte explicite (proxy first-party, sous-domaine dédié) |
+| `data-spa` | `true` | Pages vues automatiques sur `pushState`/`replaceState`/`popstate` |
+| `data-hash` | `false` | `true` : routage par `#fragment` (le hash entre dans l'URL mesurée, `hashchange` écouté) |
+| `data-outbound` | `true` | Événement automatique « Lien sortant » au clic sur un lien externe |
+| `data-exclude` | (vide) | Préfixes de chemins ignorés, séparés par des virgules : `/admin,/preview` |
+| `data-dnt` | (off) | `respect` : n'émet rien si Do Not Track ou Global Privacy Control est actif |
+| `data-dev` | `false` | `true` : autorise localhost et les IP privées (développement) |
 
-## API
+## Usage
 
 ```js
-wa('inscription', { plan: 'pro' });   // événement personnalisé (+ props scalaires)
-wa.pageview();                        // page vue manuelle (si data-spa="false")
-window.__waDisable = true;            // kill switch (ex. utilisateurs connectés)
+// Événement personnalisé (nom <= 120 caractères, propriétés scalaires)
+wa('inscription', { plan: 'pro' });
+
+// Page vue manuelle (utile avec data-spa="false")
+wa.pageview();
+
+// Kill switch, par exemple pour exclure les utilisateurs connectés
+window.__waDisable = true;
 ```
 
-## Garanties
+Ces appels fonctionnent aussi avant le chargement du script grâce au snippet de file d'attente. Un appel `wa()` sans nom est ignoré.
 
-- Aucun stockage côté visiteur (ni cookie, ni localStorage) — voir `docs/02-faisabilite-rgpd.md`.
-- N'émet rien : navigateurs pilotés (`webdriver`), localhost (sauf `data-dev`), chemins exclus, DNT/GPC si activé.
-- Jamais d'erreur visible : tous les échecs réseau sont silencieux.
-- `sendBeacon` en priorité (fiable au déchargement de page), repli `fetch keepalive` puis XHR.
-- Corps en `text/plain` → pas de préflight CORS (une seule requête par hit).
+## Comment ça marche
 
-## Reste à faire avant v1
+- Chaque hit est un `POST` JSON avec des clés courtes (`k` clé du site, `t` type, `u` URL, `r` referrer, `w` largeur d'écran, `l` langue, `n` nom d'événement, `p` propriétés). Spec complète : `docs/05-api-et-sdk.md` à la racine du monorepo.
+- Envoi par `navigator.sendBeacon` (fiable au déchargement de page), repli `fetch keepalive`, puis `XMLHttpRequest`.
+- Corps en `text/plain` : pas de préflight CORS, une seule requête par hit.
+- Déduplication locale : un même chemin n'émet pas deux pageviews consécutives (double `pushState`).
+- N'émet jamais : navigateurs pilotés (`navigator.webdriver`), localhost et IP privées (sauf `data-dev`), chemins exclus, DNT/GPC si `data-dnt="respect"`.
+- Tous les échecs réseau sont silencieux : l'analytics ne casse jamais le site mesuré.
 
-- [ ] Pipeline de minification + version (`wa.js` → `wa.min.js`, en-tête de version, sourcemap).
-- [ ] Tests navigateurs (Playwright) : SPA, beacon au unload, file d'attente, exclusions.
-- [ ] Événement auto « Téléchargement » (extensions configurables) — v1.
-- [ ] Ping de durée d'engagement (`visibilitychange`) pour la durée de la dernière page — v1.x.
+## Vie privée
+
+Aucune donnée n'est stockée chez le visiteur : ni cookie, ni localStorage, ni fingerprinting côté client. L'identification de visite est faite côté serveur par hash journalier non réversible (voir `docs/02-faisabilite-rgpd.md`).
+
+## Taille
+
+Fichier source : environ 5,4 Ko (2,3 Ko gzip avec les commentaires, 1,5 Ko gzip sans). Cible servie en production : < 2 Ko min+gzip (minification `terser` au déploiement).
+
+## Tests
+
+Harnais Node sans dépendance (simulation minimale de `window`/`document`) :
+
+```bash
+node --check tracker.js
+node tests/run.js
+```
+
+## Licence
+
+MIT.
