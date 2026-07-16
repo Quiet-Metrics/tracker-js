@@ -1,14 +1,14 @@
-# Affluence wa.js : tracker JavaScript
+# Quiet Metrics qm.js : tracker JavaScript
 
-Script de mesure d'audience sans cookies pour [Affluence](https://app.affluence.fr), édité par La Boîte à Code. ES5, zéro dépendance, aucun build : un seul fichier, cible < 2 Ko min+gzip.
+Script de mesure d'audience sans cookies pour [Quiet Metrics](https://quietmetrics.dev), édité par La Boîte à Code. ES5, zéro dépendance, aucun build : un seul fichier, cible < 2 Ko min+gzip.
 
 ## Installation
 
 ### Balise script (cas général)
 
 ```html
-<script>window.wa=window.wa||function(){(window.wa.q=window.wa.q||[]).push(arguments)}</script>
-<script defer src="https://app.affluence.fr/wa.js" data-site="wa_pub_XXXX"></script>
+<script>window.qm=window.qm||function(){(window.qm.q=window.qm.q||[]).push(arguments)}</script>
+<script defer src="https://app.quietmetrics.dev/qm.js" data-site="qm_pub_XXXX"></script>
 ```
 
 La première ligne installe une file d'attente : tout appel `wa(...)` fait avant le chargement du script est rejoué automatiquement.
@@ -18,7 +18,7 @@ La première ligne installe une file d'attente : tout appel `wa(...)` fait avant
 Copiez `tracker.js` sur votre propre domaine (ou servez-le via le proxy `wa-proxy.php` du package PHP) :
 
 ```html
-<script defer src="https://monsite.fr/wa.js" data-site="wa_pub_XXXX"></script>
+<script defer src="https://monsite.fr/qm.js" data-site="qm_pub_XXXX"></script>
 ```
 
 L'endpoint de collecte est déduit de l'origine du `src` (`…/collect`) : servir le script depuis votre domaine suffit à ce que la collecte passe aussi par votre domaine. Les listes de blocage par nom de domaine deviennent inopérantes.
@@ -27,7 +27,7 @@ L'endpoint de collecte est déduit de l'origine du `src` (`…/collect`) : servi
 
 | Attribut | Défaut | Effet |
 |---|---|---|
-| `data-site` | (requis) | Clé publique du site (`wa_pub_…`) |
+| `data-site` | (requis) | Clé publique du site (`qm_pub_…`) |
 | `data-endpoint` | déduit du `src` (`…/collect`) | URL de collecte explicite (proxy first-party, sous-domaine dédié) |
 | `data-spa` | `true` | Pages vues automatiques sur `pushState`/`replaceState`/`popstate` |
 | `data-hash` | `false` | `true` : routage par `#fragment` (le hash entre dans l'URL mesurée, `hashchange` écouté) |
@@ -40,13 +40,13 @@ L'endpoint de collecte est déduit de l'origine du `src` (`…/collect`) : servi
 
 ```js
 // Événement personnalisé (nom <= 120 caractères, propriétés scalaires)
-wa('inscription', { plan: 'pro' });
+qm('inscription', { plan: 'pro' });
 
 // Page vue manuelle (utile avec data-spa="false")
 wa.pageview();
 
 // Kill switch, par exemple pour exclure les utilisateurs connectés
-window.__waDisable = true;
+window.__qmDisable = true;
 ```
 
 Ces appels fonctionnent aussi avant le chargement du script grâce au snippet de file d'attente. Un appel `wa()` sans nom est ignoré.

@@ -19,7 +19,7 @@ var SOURCE = fs.readFileSync(path.join(__dirname, '..', 'tracker.js'), 'utf8');
 function makeEnv(options) {
   options = options || {};
   var attrs = options.attrs || {};
-  if (!('data-site' in attrs)) attrs['data-site'] = 'wa_pub_test';
+  if (!('data-site' in attrs)) attrs['data-site'] = 'qm_pub_test';
 
   var sent = [];       // hits sendBeacon
   var xhrSent = [];    // hits repli XHR
@@ -27,7 +27,7 @@ function makeEnv(options) {
   var winListeners = {};
 
   var script = {
-    src: options.src !== undefined ? options.src : 'https://collect.example.fr/wa.js',
+    src: options.src !== undefined ? options.src : 'https://collect.example.fr/qm.js',
     getAttribute: function (name) {
       return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
     }
@@ -64,8 +64,8 @@ function makeEnv(options) {
     console: console
   };
   if (options.queue) {
-    win.wa = function () {};
-    win.wa.q = options.queue;
+    win.qm = function () {};
+    win.qm.q = options.queue;
   }
 
   var doc = {
@@ -113,7 +113,7 @@ test('pageview initiale : payload k/t/u/r/l/w conforme a docs/05', function () {
   assert.strictEqual(env.sent.length, 1);
   var hit = env.sent[0];
   assert.strictEqual(hit.url, 'https://collect.example.fr/collect'); // endpoint deduit du src
-  assert.strictEqual(hit.body.k, 'wa_pub_test');
+  assert.strictEqual(hit.body.k, 'qm_pub_test');
   assert.strictEqual(hit.body.t, 'pageview');
   assert.strictEqual(hit.body.u, 'https://monsite.fr/');
   assert.strictEqual(hit.body.r, 'https://google.fr/');
@@ -130,7 +130,7 @@ test('data-endpoint prime sur la deduction depuis le src', function () {
 
 test('evenement custom : wa(nom, props) => t=event, n, p', function () {
   var env = makeEnv();
-  env.win.wa('inscription', { plan: 'pro' });
+  env.win.qm('inscription', { plan: 'pro' });
   assert.strictEqual(env.sent.length, 2);
   var hit = env.sent[1];
   assert.strictEqual(hit.body.t, 'event');
@@ -140,13 +140,13 @@ test('evenement custom : wa(nom, props) => t=event, n, p', function () {
 
 test('wa() sans nom n\'emet rien (aurait ete un 400 serveur)', function () {
   var env = makeEnv();
-  env.win.wa();
+  env.win.qm();
   assert.strictEqual(env.sent.length, 1); // seulement la pageview initiale
 });
 
 test('nom d\'evenement tronque a 120 caracteres', function () {
   var env = makeEnv();
-  env.win.wa(new Array(200 + 1).join('x'));
+  env.win.qm(new Array(200 + 1).join('x'));
   assert.strictEqual(env.sent[1].body.n.length, 120);
 });
 
@@ -227,14 +227,14 @@ test('localhost ignore par defaut, autorise avec data-dev="true"', function () {
 test('navigateur pilote (webdriver) : aucun envoi', function () {
   var env = makeEnv();
   env.win.navigator.webdriver = true;
-  env.win.wa('bot_event');
+  env.win.qm('bot_event');
   assert.strictEqual(env.sent.length, 1); // rien apres la pageview initiale
 });
 
-test('kill switch __waDisable', function () {
+test('kill switch __qmDisable', function () {
   var env = makeEnv();
-  env.win.__waDisable = true;
-  env.win.wa('ignore');
+  env.win.__qmDisable = true;
+  env.win.qm('ignore');
   assert.strictEqual(env.sent.length, 1);
 });
 
