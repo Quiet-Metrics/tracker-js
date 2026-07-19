@@ -265,6 +265,56 @@ test('data-outbound="false" : pas d\'ecouteur de clic', function () {
   assert.ok(!env.docListeners.click);
 });
 
+// Telechargements et 404 sont opt-in : les activer par defaut ajouterait des
+// evenements au quota de comptes dont le trafic n'a pas bouge.
+test('telechargements : rien sans data-downloads', function () {
+  var env = makeEnv();
+  var handler = env.docListeners.click[0];
+  handler({ target: { tagName: 'A', href: 'https://monsite.fr/guide.pdf',
+                      pathname: '/guide.pdf', host: 'monsite.fr', parentElement: null } });
+  assert.strictEqual(env.sent.length, 1, 'seule la page vue initiale');
+});
+
+test('telechargements : evenement auto quand data-downloads="true"', function () {
+  var env = makeEnv({ attrs: { 'data-downloads': 'true' } });
+  var handler = env.docListeners.click[0];
+  handler({ target: { tagName: 'A', href: 'https://monsite.fr/guide.pdf',
+                      pathname: '/guide.pdf', host: 'monsite.fr', parentElement: null } });
+  assert.strictEqual(env.sent.length, 2);
+  assert.strictEqual(env.sent[1].body.n, 'Téléchargement');
+  assert.deepStrictEqual(env.sent[1].body.p, { url: 'https://monsite.fr/guide.pdf' });
+});
+
+test('telechargement externe : un seul evenement, jamais deux', function () {
+  var env = makeEnv({ attrs: { 'data-downloads': 'true' } });
+  var handler = env.docListeners.click[0];
+  handler({ target: { tagName: 'A', href: 'https://ailleurs.fr/doc.zip',
+                      pathname: '/doc.zip', host: 'ailleurs.fr', parentElement: null } });
+  assert.strictEqual(env.sent.length, 2, 'un clic = un evenement, pas deux');
+  assert.strictEqual(env.sent[1].body.n, 'Téléchargement');
+});
+
+test('telechargements : une page normale n\'est pas comptee comme telechargement', function () {
+  var env = makeEnv({ attrs: { 'data-downloads': 'true' } });
+  var handler = env.docListeners.click[0];
+  handler({ target: { tagName: 'A', href: 'https://monsite.fr/tarifs',
+                      pathname: '/tarifs', host: 'monsite.fr', parentElement: null } });
+  assert.strictEqual(env.sent.length, 1);
+});
+
+test('404 : rien sans data-404', function () {
+  var env = makeEnv();
+  assert.strictEqual(env.sent.length, 1);
+  assert.strictEqual(env.sent[0].body.t, 'pageview');
+});
+
+test('404 : la page vue est conservee, l\'evenement s\'y ajoute', function () {
+  var env = makeEnv({ attrs: { 'data-404': 'true' } });
+  assert.strictEqual(env.sent.length, 2);
+  assert.strictEqual(env.sent[0].body.t, 'pageview');
+  assert.strictEqual(env.sent[1].body.n, '404');
+});
+
 test('data-site manquant : le script ne fait rien et ne plante pas', function () {
   var env = makeEnv({ attrs: { 'data-site': null } });
   assert.strictEqual(env.sent.length, 0);

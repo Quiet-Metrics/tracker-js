@@ -32,6 +32,8 @@ L'endpoint de collecte est déduit de l'origine du `src` (`…/collect`) : servi
 | `data-spa` | `true` | Pages vues automatiques sur `pushState`/`replaceState`/`popstate` |
 | `data-hash` | `false` | `true` : routage par `#fragment` (le hash entre dans l'URL mesurée, `hashchange` écouté) |
 | `data-outbound` | `true` | Événement automatique « Lien sortant » au clic sur un lien externe |
+| `data-downloads` | `false` | `true` : événement « Téléchargement » au clic sur un lien de fichier (pdf, zip, docx…). Opt-in volontaire : ces événements comptent dans le quota, une mise à jour ne doit pas gonfler une facture. |
+| `data-404` | `false` | `true` : événement « 404 » avec le chemin demandé. À poser sur le seul gabarit d'erreur ; la page vue reste comptée normalement. |
 | `data-exclude` | (vide) | Préfixes de chemins ignorés, séparés par des virgules : `/admin,/preview` |
 | `data-dnt` | (off) | `respect` : n'émet rien si Do Not Track ou Global Privacy Control est actif |
 | `data-dev` | `false` | `true` : autorise localhost et les IP privées (développement) |
