@@ -8,7 +8,7 @@ Script de mesure d'audience sans cookies pour [Quiet Metrics](https://quietmetri
 
 ```html
 <script>window.qm=window.qm||function(){(window.qm.q=window.qm.q||[]).push(arguments)}</script>
-<script defer src="https://app.quietmetrics.dev/qm.js" data-site="qm_pub_XXXX"></script>
+<script defer src="https://quietmetrics.dev/qm.js" data-site="qm_pub_XXXX"></script>
 ```
 
 La première ligne installe une file d'attente : tout appel `wa(...)` fait avant le chargement du script est rejoué automatiquement.
