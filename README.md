@@ -1,84 +1,96 @@
-# Quiet Metrics qm.js : tracker JavaScript
+# Quiet Metrics qm.js: JavaScript tracker
 
-Script de mesure d'audience sans cookies pour [Quiet Metrics](https://quietmetrics.dev), édité par La Boîte à Code. ES5, zéro dépendance, aucun build : un seul fichier, cible < 2 Ko min+gzip.
+![Quiet Metrics: qm.js tracker](art/banner.png)
+
+> 🇫🇷 [Version française](README.fr.md)
+
+Cookie-free audience measurement script for [Quiet Metrics](https://quietmetrics.dev), by La Boîte à Code. ES5, zero dependencies, no build step: a single file, targeting < 2 KB min+gzip.
 
 ## Installation
 
-### Balise script (cas général)
+### Script tag (general case)
 
 ```html
 <script>window.qm=window.qm||function(){(window.qm.q=window.qm.q||[]).push(arguments)}</script>
 <script defer src="https://quietmetrics.dev/qm.js" data-site="qm_pub_XXXX"></script>
 ```
 
-La première ligne installe une file d'attente : tout appel `wa(...)` fait avant le chargement du script est rejoué automatiquement.
+The first line installs a queue: any `qm(...)` call made before the script loads is replayed automatically.
 
-### Copie first-party (anti-adblock)
+> **Why no `integrity` (SRI) attribute on this tag?** The platform-served
+> script is updated server-side; an SRI hash would pin one version and
+> silently break measurement at the first update. If you want immutability,
+> use the first-party copy below: served from your own domain, under your
+> control (and you are free to add SRI to it, since you decide when it
+> updates). In every case, a restrictive `script-src` CSP is documented in
+> the installation guide.
 
-Copiez `tracker.js` sur votre propre domaine (ou servez-le via le proxy `wa-proxy.php` du package PHP) :
+### First-party copy (anti-adblock)
+
+Copy `tracker.js` onto your own domain (or serve it through the PHP package's `qm-proxy.php`):
 
 ```html
-<script defer src="https://monsite.fr/qm.js" data-site="qm_pub_XXXX"></script>
+<script defer src="https://mysite.com/qm.js" data-site="qm_pub_XXXX"></script>
 ```
 
-L'endpoint de collecte est déduit de l'origine du `src` (`…/collect`) : servir le script depuis votre domaine suffit à ce que la collecte passe aussi par votre domaine. Les listes de blocage par nom de domaine deviennent inopérantes.
+The collection endpoint is inferred from the `src` origin (`…/collect`): serving the script from your domain is enough for collection to go through your domain too. Domain-based blocklists become powerless.
 
-## Configuration (attributs `data-*` de la balise)
+## Configuration (`data-*` attributes on the tag)
 
-| Attribut | Défaut | Effet |
+| Attribute | Default | Effect |
 |---|---|---|
-| `data-site` | (requis) | Clé publique du site (`qm_pub_…`) |
-| `data-endpoint` | déduit du `src` (`…/collect`) | URL de collecte explicite (proxy first-party, sous-domaine dédié) |
-| `data-spa` | `true` | Pages vues automatiques sur `pushState`/`replaceState`/`popstate` |
-| `data-hash` | `false` | `true` : routage par `#fragment` (le hash entre dans l'URL mesurée, `hashchange` écouté) |
-| `data-outbound` | `true` | Événement automatique « Lien sortant » au clic sur un lien externe |
-| `data-downloads` | `false` | `true` : événement « Téléchargement » au clic sur un lien de fichier (pdf, zip, docx…). Opt-in volontaire : ces événements comptent dans le quota, une mise à jour ne doit pas gonfler une facture. |
-| `data-404` | `false` | `true` : événement « 404 » avec le chemin demandé. À poser sur le seul gabarit d'erreur ; la page vue reste comptée normalement. |
-| `data-exclude` | (vide) | Préfixes de chemins ignorés, séparés par des virgules : `/admin,/preview` |
-| `data-dnt` | (off) | `respect` : n'émet rien si Do Not Track ou Global Privacy Control est actif |
-| `data-dev` | `false` | `true` : autorise localhost et les IP privées (développement) |
+| `data-site` | (required) | Site public key (`qm_pub_…`) |
+| `data-endpoint` | inferred from `src` (`…/collect`) | Explicit collection URL (first-party proxy, dedicated subdomain) |
+| `data-spa` | `true` | Automatic page views on `pushState`/`replaceState`/`popstate` |
+| `data-hash` | `false` | `true`: `#fragment` routing (the hash joins the measured URL, `hashchange` listened to) |
+| `data-outbound` | `true` | Automatic "Outbound link" event on external link clicks |
+| `data-downloads` | `false` | `true`: "Download" event on file link clicks (pdf, zip, docx…). Deliberately opt-in: these events count against the quota; an update must not inflate a bill. |
+| `data-404` | `false` | `true`: "404" event with the requested path. Add it to the error template only; the page view is still counted normally. |
+| `data-exclude` | (empty) | Ignored path prefixes, comma-separated: `/admin,/preview` |
+| `data-dnt` | (off) | `respect`: emits nothing when Do Not Track or Global Privacy Control is active |
+| `data-dev` | `false` | `true`: allows localhost and private IPs (development) |
 
 ## Usage
 
 ```js
-// Événement personnalisé (nom <= 120 caractères, propriétés scalaires)
-qm('inscription', { plan: 'pro' });
+// Custom event (name <= 120 characters, scalar properties)
+qm('signup', { plan: 'pro' });
 
-// Page vue manuelle (utile avec data-spa="false")
-wa.pageview();
+// Manual page view (useful with data-spa="false")
+qm.pageview();
 
-// Kill switch, par exemple pour exclure les utilisateurs connectés
+// Kill switch, e.g. to exclude logged-in users
 window.__qmDisable = true;
 ```
 
-Ces appels fonctionnent aussi avant le chargement du script grâce au snippet de file d'attente. Un appel `wa()` sans nom est ignoré.
+These calls also work before the script loads, thanks to the queue snippet. A `qm()` call without a name is ignored.
 
-## Comment ça marche
+## How it works
 
-- Chaque hit est un `POST` JSON avec des clés courtes (`k` clé du site, `t` type, `u` URL, `r` referrer, `w` largeur d'écran, `l` langue, `n` nom d'événement, `p` propriétés). Spec complète : `docs/05-api-et-sdk.md` à la racine du monorepo.
-- Envoi par `navigator.sendBeacon` (fiable au déchargement de page), repli `fetch keepalive`, puis `XMLHttpRequest`.
-- Corps en `text/plain` : pas de préflight CORS, une seule requête par hit.
-- Déduplication locale : un même chemin n'émet pas deux pageviews consécutives (double `pushState`).
-- N'émet jamais : navigateurs pilotés (`navigator.webdriver`), localhost et IP privées (sauf `data-dev`), chemins exclus, DNT/GPC si `data-dnt="respect"`.
-- Tous les échecs réseau sont silencieux : l'analytics ne casse jamais le site mesuré.
+- Every hit is a JSON `POST` with short keys (`k` site key, `t` type, `u` URL, `r` referrer, `w` screen width, `l` language, `n` event name, `p` properties). Full spec: `docs/05-api-et-sdk.md` at the monorepo root.
+- Sent via `navigator.sendBeacon` (reliable on page unload), with `fetch keepalive` then `XMLHttpRequest` fallbacks.
+- `text/plain` body: no CORS preflight, a single request per hit.
+- Local deduplication: the same path never emits two consecutive page views (double `pushState`).
+- Never emits for: automated browsers (`navigator.webdriver`), localhost and private IPs (unless `data-dev`), excluded paths, DNT/GPC when `data-dnt="respect"`.
+- All network failures are silent: analytics never breaks the measured site.
 
-## Vie privée
+## Privacy
 
-Aucune donnée n'est stockée chez le visiteur : ni cookie, ni localStorage, ni fingerprinting côté client. L'identification de visite est faite côté serveur par hash journalier non réversible (voir `docs/02-faisabilite-rgpd.md`).
+Nothing is stored on the visitor's device: no cookie, no localStorage, no client-side fingerprinting. Visit identification happens server-side through a non-reversible daily hash (see `docs/02-faisabilite-rgpd.md`).
 
-## Taille
+## Size
 
-Fichier source : environ 5,4 Ko (2,3 Ko gzip avec les commentaires, 1,5 Ko gzip sans). Cible servie en production : < 2 Ko min+gzip (minification `terser` au déploiement).
+Source file: about 5.4 KB (2.3 KB gzipped with comments, 1.5 KB without). Production target: < 2 KB min+gzip (`terser` minification at deploy time).
 
 ## Tests
 
-Harnais Node sans dépendance (simulation minimale de `window`/`document`) :
+Dependency-free Node harness (minimal `window`/`document` simulation):
 
 ```bash
 node --check tracker.js
 node tests/run.js
 ```
 
-## Licence
+## License
 
 MIT.
