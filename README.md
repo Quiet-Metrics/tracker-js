@@ -93,4 +93,4 @@ node tests/run.js
 
 ## License
 
-MIT.
+MIT. A [La Boîte à Code](https://laboiteacode.fr) product for [Quiet Metrics](https://quietmetrics.dev).
