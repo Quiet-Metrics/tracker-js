@@ -3,6 +3,15 @@
 All notable changes to the Quiet Metrics `qm.js` tracker are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org).
 
+## [0.3.0] - 2026-08-28
+
+### Added
+- **Visit continuity cookie.** The visitor fingerprint is recomputed on every hit from the subscriber network and the browser. When that network changes MID-VISIT (switching from mobile data to wifi), the fingerprint changes and the same person was counted as two unique visitors on the same day. `qm_visit` closes that: a first-party cookie of the tracked site, value `1`, sliding ten-minute window refreshed on each hit (`path=/`, `samesite=lax`, `secure` over https). It holds no identifier, its value being the same for everyone, and it is never set for someone who has opted out. Only its presence travels, as the `c` boolean of the payload.
+
+### Changed
+- `openVisit()` reads the cookie THEN refreshes it and returns the previous state, so the read cannot be lost to call ordering. Called after `shouldIgnore()`, therefore never for someone who opted out.
+- Served weight: 3 962 bytes gzipped against the announced 4 KB ceiling. **38 bytes of headroom left.** Measure before adding anything: `gzip -9 -c apps/platform/public/qm.js | wc -c`.
+
 ## [0.2.0] - 2026-08-28
 
 Full pre-publication review pending (the core PHP SDK and the Laravel bridge already went through theirs).

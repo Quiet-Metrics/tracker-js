@@ -68,7 +68,7 @@ Ces appels fonctionnent aussi avant le chargement du script grâce au snippet de
 
 ## Comment ça marche
 
-- Chaque hit est un `POST` JSON avec des clés courtes (`k` clé du site, `t` type, `u` URL, `r` referrer, `w` largeur d'écran, `l` langue, `n` nom d'événement, `p` propriétés). Spec complète : `docs/05-api-et-sdk.md` à la racine du monorepo.
+- Chaque hit est un `POST` JSON avec des clés courtes (`k` clé du site, `t` type, `u` URL, `r` referrer, `w` largeur d'écran, `l` langue, `n` nom d'événement, `p` propriétés, `c` visite déjà en cours). Spec complète : `docs/05-api-et-sdk.md` à la racine du monorepo.
 - Envoi par `navigator.sendBeacon` (fiable au déchargement de page), repli `fetch keepalive`, puis `XMLHttpRequest`.
 - Corps en `text/plain` : pas de préflight CORS, une seule requête par hit.
 - Déduplication locale : un même chemin n'émet pas deux pageviews consécutives (double `pushState`).
@@ -88,17 +88,25 @@ Le marqueur posé par cette visite s'appelle `qm_ignore` et vaut `1`. Il est éc
 
 Le marqueur ne contient aucun identifiant (sa valeur est la même chez tout le monde), il n'est jamais transmis à Quiet Metrics, et il n'existe que pour arrêter la mesure. La visite qui le pose n'est pas comptée ; celle qui le retire l'est immédiatement.
 
+## Continuité de visite
+
+Quand l'empreinte visiteur change en cours de visite (4G puis wifi), la même personne compterait sinon pour deux visiteurs uniques le même jour. Un cookie propriétaire du site mesuré ferme cet écart : `qm_visit`, valant `1` (`path=/`, `samesite=lax`, `secure` en https), sur une fenêtre glissante de dix minutes repoussée à chaque hit.
+
+Sa valeur est constante, la même chez tout le monde : elle n'identifie personne, elle dit seulement qu'une visite est déjà en cours sur ce navigateur. Chaque hit reporte cet état dans `c: 1`, lu **avant** que la fenêtre ne soit repoussée, et la clé est simplement absente sinon.
+
+Il n'est jamais écrit chez quelqu'un qui a posé le marqueur d'exclusion, ni quand aucun hit ne part (chemin exclu, localhost, DNT respecté).
+
 ## Vie privée
 
-Rien n'est stocké chez le visiteur pour le mesurer : ni cookie d'identification, ni identifiant en localStorage, ni fingerprinting côté client. La seule écriture est le marqueur d'exclusion ci-dessus, posé à la demande de la personne pour qu'on cesse de la compter. L'identification de visite est faite côté serveur par hash journalier non réversible (voir `docs/02-faisabilite-rgpd.md`).
+Rien de ce qui est écrit chez le visiteur ne le distingue de quiconque : ni cookie d'identification, ni identifiant en localStorage, ni fingerprinting côté client. Deux cookies sont posés, et leur valeur est la même chez tout le monde : le marqueur d'exclusion, posé à la demande de la personne pour qu'on cesse de la compter, et le cookie de continuité de visite ci-dessus. L'identification de visite est faite côté serveur par hash journalier non réversible (voir `docs/02-faisabilite-rgpd.md`).
 
 ## Taille
 
-Fichier source : de l'ordre de 8,8 Ko, dont près de la moitié de commentaires. Il est servi **tel quel** : aucune étape de minification n'existe dans la chaîne, contrairement à ce que ce README a longtemps affirmé. Cela fait environ 3,7 Ko compressés, pour un plafond annoncé de 4 Ko.
+Fichier source : de l'ordre de 9,8 Ko, dont près de la moitié de commentaires. Il est servi **tel quel** : aucune étape de minification n'existe dans la chaîne, contrairement à ce que ce README a longtemps affirmé. Cela fait environ 3,96 Ko compressés, pour un plafond annoncé de 4 Ko.
 
 Conséquence à garder en tête avant d'écrire ici : les commentaires de ce fichier partent chez chaque visiteur de chaque site client. Ils ne sont pas gratuits, contrairement à ceux du reste du dépôt.
 
-Il reste environ 275 octets de marge. Se mesure avant d'ajouter, pas après :
+Il reste environ 38 octets de marge, le cookie de continuité de visite du 28 août 2026 en ayant consommé l'essentiel. Se mesure avant d'ajouter, pas après :
 
 ```bash
 gzip -9 -c apps/platform/public/qm.js | wc -c

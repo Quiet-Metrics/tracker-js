@@ -67,7 +67,7 @@ These calls also work before the script loads, thanks to the queue snippet. A `q
 
 ## How it works
 
-- Every hit is a JSON `POST` with short keys (`k` site key, `t` type, `u` URL, `r` referrer, `w` screen width, `l` language, `n` event name, `p` properties). Full spec: `docs/05-api-et-sdk.md` at the monorepo root.
+- Every hit is a JSON `POST` with short keys (`k` site key, `t` type, `u` URL, `r` referrer, `w` screen width, `l` language, `n` event name, `p` properties, `c` visit already under way). Full spec: `docs/05-api-et-sdk.md` at the monorepo root.
 - Sent via `navigator.sendBeacon` (reliable on page unload), with `fetch keepalive` then `XMLHttpRequest` fallbacks.
 - `text/plain` body: no CORS preflight, a single request per hit.
 - Local deduplication: the same path never emits two consecutive page views (double `pushState`).
@@ -87,15 +87,23 @@ The marker that visit stores is called `qm_ignore` and its value is `1`. It is w
 
 The marker holds no identifier (its value is the same for everyone), it is never transmitted to Quiet Metrics, and it exists only to stop measurement. The visit that stores it is not counted; the visit that removes it is counted right away.
 
+## Visit continuity
+
+When the visitor fingerprint changes mid-visit (4G, then wifi), the same person would otherwise be counted as two unique visitors on the same day. A first-party cookie of the tracked site closes that gap: `qm_visit`, value `1` (`path=/`, `samesite=lax`, `secure` over https), on a sliding ten-minute window pushed back by every hit.
+
+The value is a constant, the same for everyone, so it identifies nobody: it only says that a visit is already under way in this browser. Each hit reports that state as `c: 1`, read *before* the window is pushed back, and the key is simply absent otherwise.
+
+It is never written to someone who has set the opt-out marker, and never written when no hit is sent (excluded path, localhost, honoured DNT).
+
 ## Privacy
 
-Nothing is stored on the visitor's device in order to measure them: no identification cookie, no identifier in localStorage, no client-side fingerprinting. The only thing ever written is the opt-out marker above, stored at the person's own request so that we stop counting them. Visit identification happens server-side through a non-reversible daily hash (see `docs/02-faisabilite-rgpd.md`).
+Nothing that identifies the visitor is stored on their device: no identification cookie, no identifier in localStorage, no client-side fingerprinting. Two things are written, and neither distinguishes anyone, since both hold the same value for everybody: the opt-out marker (cookie plus `localStorage`) and the visit continuity cookie. They do not fall under the same regime, so they never belong under the same heading. The marker records the person's own refusal: CNIL guidelines exempt that kind of marker from consent, it is stored at the person's own request so that we stop counting them, and its contents are never transmitted, so we do not even learn that someone has opted out. The continuity cookie serves measurement, so it falls under the audience measurement regime, which the publisher of the tracked site determines. Visit identification happens server-side through a non-reversible daily hash (see `docs/02-faisabilite-rgpd.md`).
 
 ## Size
 
-Source file: on the order of 8.8 KB, close to half of it comments. It is served AS IS, with no minification step anywhere in the pipeline: roughly 3.7 KB gzipped, against an announced ceiling of 4 KB. Comments therefore travel to every visitor of every customer site, so keep them short. Measure before adding to this file, not after: `gzip -9 -c apps/platform/public/qm.js | wc -c`.
+Source file: on the order of 9.8 KB, close to half of it comments. It is served AS IS, with no minification step anywhere in the pipeline: roughly 3.96 KB gzipped, against an announced ceiling of 4 KB. Comments therefore travel to every visitor of every customer site, so keep them short. Measure before adding to this file, not after: `gzip -9 -c apps/platform/public/qm.js | wc -c`.
 
-Roughly 275 bytes of headroom are left under the 4 KB ceiling. Measure before writing, not after:
+Roughly 38 bytes of headroom are left under the 4 KB ceiling, after the visit continuity cookie of 2026-08-28 spent most of it. Measure before writing, not after:
 
 ```bash
 gzip -9 -c apps/platform/public/qm.js | wc -c
