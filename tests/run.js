@@ -81,11 +81,16 @@ function makeEnv(options) {
   // bocal, l'ecriture n'en modifie qu'une entree. Simuler l'un sans l'autre
   // ferait passer un tracker qui ecrase tous les cookies du site hote.
   var cookieJar = Object.assign({}, options.cookies || {});
+  // Les ecritures brutes sont conservees en plus du bocal : le bocal dit
+  // quelle valeur reste, les ecritures disent avec quels attributs, et
+  // l'expiration glissante du cookie de visite ne se lit que la.
+  var cookieWrites = [];
   Object.defineProperty(doc, 'cookie', {
     get: function () {
       return Object.keys(cookieJar).map(function (k) { return k + '=' + cookieJar[k]; }).join('; ');
     },
     set: function (raw) {
+      cookieWrites.push(String(raw));
       var first = String(raw).split(';')[0];
       var name = first.split('=')[0].trim();
       var value = first.split('=').slice(1).join('=').trim();
@@ -122,7 +127,7 @@ function makeEnv(options) {
   return {
     win: win, doc: doc, location: location, sent: sent, xhrSent: xhrSent,
     docListeners: docListeners, winListeners: winListeners,
-    cookies: cookieJar, storage: storage
+    cookies: cookieJar, cookieWrites: cookieWrites, storage: storage
   };
 }
 
@@ -402,6 +407,103 @@ test('le marqueur n ecrase aucun cookie du site hote', function () {
 test('localStorage indisponible (mode prive) : le cookie suffit', function () {
   var env = makeEnv({ noStorage: true, cookies: { qm_ignore: '1' } });
   assert.strictEqual(env.sent.length, 0);
+});
+
+/* -- Continuite de visite -------------------------------------------------
+ * Cookie `qm_visit`, valeur constante `1` : la MEME chez tout le monde. Il
+ * n'identifie personne, il dit seulement qu'une visite est deja en cours sur
+ * ce navigateur. Sans lui, une empreinte qui change EN COURS DE VISITE (4G
+ * puis wifi) fait compter la meme personne deux fois le meme jour.
+ *
+ * Ce que ces tests gardent : la valeur ne varie pas, l'expiration glisse a
+ * chaque hit, `c` dit l'etat AU MOMENT du hit et non apres, et rien n'est
+ * jamais ecrit chez une personne qui s'est exclue.
+ */
+
+function visitWrites(env) {
+  return env.cookieWrites.filter(function (raw) { return raw.indexOf('qm_visit=') === 0; });
+}
+
+test('premier hit : pas de `c`, et le cookie de visite est pose', function () {
+  var env = makeEnv();
+  assert.strictEqual(env.sent[0].body.c, undefined, 'aucune visite en cours au moment du hit');
+  assert.strictEqual(env.cookies.qm_visit, '1');
+});
+
+test('visite deja en cours : `c` vaut 1', function () {
+  var env = makeEnv({ cookies: { qm_visit: '1' } });
+  assert.strictEqual(env.sent[0].body.c, 1);
+});
+
+test('`c` dit l etat AU MOMENT du hit, pas apres le rafraichissement', function () {
+  var env = makeEnv();
+  env.win.history.pushState({}, '', '/page-2');
+  assert.strictEqual(env.sent[0].body.c, undefined, 'premier hit : rien n etait pose');
+  assert.strictEqual(env.sent[1].body.c, 1, 'le hit suivant voit le cookie pose par le premier');
+});
+
+test('expiration glissante : chaque hit repousse les 10 minutes', function () {
+  var env = makeEnv();
+  env.win.qm('inscription');
+  var writes = visitWrites(env);
+  assert.strictEqual(writes.length, 2, 'un rafraichissement par hit, evenements compris');
+  writes.forEach(function (raw) {
+    assert.ok(/(^|;)max-age=600(;|$)/.test(raw), 'dix minutes : ' + raw);
+    assert.ok(/;path=\/(;|$)/.test(raw), 'tout le site : ' + raw);
+    assert.ok(/;samesite=lax/.test(raw), raw);
+    assert.ok(/;secure/.test(raw), 'page en https : ' + raw);
+  });
+});
+
+test('en http, le cookie de visite n est pas secure (il serait rejete)', function () {
+  var env = makeEnv({
+    attrs: { 'data-dev': 'true' },
+    location: { protocol: 'http:', host: 'localhost:8000', hostname: 'localhost',
+                pathname: '/', search: '', hash: '' }
+  });
+  assert.strictEqual(visitWrites(env).length, 1);
+  assert.strictEqual(visitWrites(env)[0].indexOf(';secure'), -1);
+});
+
+test('personne exclue : on n ecrit RIEN chez qui a refuse', function () {
+  var env = makeEnv({ cookies: { qm_ignore: '1' } });
+  assert.strictEqual(env.sent.length, 0);
+  assert.strictEqual(env.cookies.qm_visit, undefined);
+  assert.deepStrictEqual(env.cookieWrites, []);
+});
+
+test('?qm_ignore=1 : le refus se pose, la visite non', function () {
+  var env = makeEnv({
+    location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+                pathname: '/', search: '?qm_ignore=1', hash: '' }
+  });
+  assert.strictEqual(env.cookies.qm_ignore, '1');
+  assert.strictEqual(env.cookies.qm_visit, undefined, 'la visite qui pose le refus n ouvre pas de visite');
+});
+
+test('aucun hit emis : aucun cookie de visite', function () {
+  var local = makeEnv({ location: { protocol: 'http:', host: 'localhost:8000',
+    hostname: 'localhost', pathname: '/', search: '', hash: '' } });
+  assert.strictEqual(local.cookies.qm_visit, undefined, 'localhost n est pas mesure');
+
+  var dnt = makeEnv({ attrs: { 'data-dnt': 'respect' }, dnt: true });
+  assert.strictEqual(dnt.cookies.qm_visit, undefined, 'DNT respecte : rien envoye, rien ecrit');
+});
+
+test('valeur constante : rien qui distingue un navigateur d un autre', function () {
+  assert.strictEqual(makeEnv().cookies.qm_visit, '1');
+  assert.strictEqual(makeEnv().cookies.qm_visit, '1');
+});
+
+test('le cookie de visite n ecrase aucun cookie du site hote', function () {
+  var env = makeEnv({ cookies: { session: 'abc' } });
+  assert.strictEqual(env.cookies.session, 'abc');
+  assert.strictEqual(env.cookies.qm_visit, '1');
+});
+
+test('le cookie de visite ne se confond pas avec un cookie voisin', function () {
+  var env = makeEnv({ cookies: { autre_qm_visit: '1', qm_visit_bis: '1' } });
+  assert.strictEqual(env.sent[0].body.c, undefined, 'seul le nom exact vaut visite en cours');
 });
 
 console.log('\n' + passed + ' tests OK');
