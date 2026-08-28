@@ -4,7 +4,7 @@
 
 > 🇫🇷 [Version française](README.fr.md)
 
-Cookie-free audience measurement script for [Quiet Metrics](https://quietmetrics.dev), by La Boîte à Code. ES5, zero dependencies, no build step: a single file, targeting < 2 KB min+gzip.
+Audience measurement script with no identification or tracking cookies, for [Quiet Metrics](https://quietmetrics.dev), by La Boîte à Code. ES5, zero dependencies, no build step: a single file, served as is under a 4 KB announced ceiling.
 
 ## Installation
 
@@ -71,16 +71,37 @@ These calls also work before the script loads, thanks to the queue snippet. A `q
 - Sent via `navigator.sendBeacon` (reliable on page unload), with `fetch keepalive` then `XMLHttpRequest` fallbacks.
 - `text/plain` body: no CORS preflight, a single request per hit.
 - Local deduplication: the same path never emits two consecutive page views (double `pushState`).
-- Never emits for: automated browsers (`navigator.webdriver`), localhost and private IPs (unless `data-dev`), excluded paths, DNT/GPC when `data-dnt="respect"`.
+- Never emits for: visitors carrying the opt-out marker (see below), automated browsers (`navigator.webdriver`), localhost and private IPs (unless `data-dev`), excluded paths, DNT/GPC when `data-dnt="respect"`.
 - All network failures are silent: analytics never breaks the measured site.
+
+## Opting out of measurement
+
+Anyone can ask to stop being counted on a tracked site, with no account and without writing to anyone: they just visit a page of that site with `?qm_ignore=1`.
+
+```
+https://mysite.com/?qm_ignore=1     stop being counted
+https://mysite.com/?qm_ignore=0     be counted again
+```
+
+The marker that visit stores is called `qm_ignore` and its value is `1`. It is written on **both sides**: a first-party cookie of the tracked site (`path=/`, `samesite=lax`, `secure` over https, five years) **and** `localStorage`. This is not belt and braces: `localStorage` takes over wherever the cookie is refused or cleared, and the cookie is the only one of the two a server-side SDK can read. A single visit therefore covers script tracking and server-side tracking alike.
+
+The marker holds no identifier (its value is the same for everyone), it is never transmitted to Quiet Metrics, and it exists only to stop measurement. The visit that stores it is not counted; the visit that removes it is counted right away.
 
 ## Privacy
 
-Nothing is stored on the visitor's device: no cookie, no localStorage, no client-side fingerprinting. Visit identification happens server-side through a non-reversible daily hash (see `docs/02-faisabilite-rgpd.md`).
+Nothing is stored on the visitor's device in order to measure them: no identification cookie, no identifier in localStorage, no client-side fingerprinting. The only thing ever written is the opt-out marker above, stored at the person's own request so that we stop counting them. Visit identification happens server-side through a non-reversible daily hash (see `docs/02-faisabilite-rgpd.md`).
 
 ## Size
 
-Source file: about 5.4 KB (2.3 KB gzipped with comments, 1.5 KB without). Production target: < 2 KB min+gzip (`terser` minification at deploy time).
+Source file: on the order of 8.8 KB, close to half of it comments. It is served AS IS, with no minification step anywhere in the pipeline: roughly 3.7 KB gzipped, against an announced ceiling of 4 KB. Comments therefore travel to every visitor of every customer site, so keep them short. Measure before adding to this file, not after: `gzip -9 -c apps/platform/public/qm.js | wc -c`.
+
+Roughly 275 bytes of headroom are left under the 4 KB ceiling. Measure before writing, not after:
+
+```bash
+gzip -9 -c apps/platform/public/qm.js | wc -c
+```
+
+Minifying at deploy time would take the served file to about 2 KB and give the comments back for free. It was considered on 2026-08-28 and set aside: it would add a build step and a `terser` dependency to a package that has neither, and `TrackerSyncTest` guards the served copies as byte-identical to the source.
 
 ## Tests
 
