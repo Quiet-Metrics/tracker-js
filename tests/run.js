@@ -77,6 +77,32 @@ function makeEnv(options) {
     }
   };
 
+  // document.cookie n'est pas une chaine ordinaire : la lecture rend tout le
+  // bocal, l'ecriture n'en modifie qu'une entree. Simuler l'un sans l'autre
+  // ferait passer un tracker qui ecrase tous les cookies du site hote.
+  var cookieJar = Object.assign({}, options.cookies || {});
+  Object.defineProperty(doc, 'cookie', {
+    get: function () {
+      return Object.keys(cookieJar).map(function (k) { return k + '=' + cookieJar[k]; }).join('; ');
+    },
+    set: function (raw) {
+      var first = String(raw).split(';')[0];
+      var name = first.split('=')[0].trim();
+      var value = first.split('=').slice(1).join('=').trim();
+      if (value === '' || /max-age=0\b/i.test(raw)) { delete cookieJar[name]; }
+      else { cookieJar[name] = value; }
+    }
+  });
+
+  var storage = Object.assign({}, options.storage || {});
+  win.localStorage = options.noStorage ? undefined : {
+    getItem: function (k) {
+      return Object.prototype.hasOwnProperty.call(storage, k) ? storage[k] : null;
+    },
+    setItem: function (k, v) { storage[k] = String(v); },
+    removeItem: function (k) { delete storage[k]; }
+  };
+
   function FakeXHR() {}
   FakeXHR.prototype.open = function (method, url) { this.method = method; this.url = url; };
   FakeXHR.prototype.send = function (body) {
@@ -95,7 +121,8 @@ function makeEnv(options) {
 
   return {
     win: win, doc: doc, location: location, sent: sent, xhrSent: xhrSent,
-    docListeners: docListeners, winListeners: winListeners
+    docListeners: docListeners, winListeners: winListeners,
+    cookies: cookieJar, storage: storage
   };
 }
 
@@ -317,6 +344,63 @@ test('404 : la page vue est conservee, l\'evenement s\'y ajoute', function () {
 
 test('data-site manquant : le script ne fait rien et ne plante pas', function () {
   var env = makeEnv({ attrs: { 'data-site': null } });
+  assert.strictEqual(env.sent.length, 0);
+});
+
+/* -- Marqueur d'exclusion ------------------------------------------------
+ * Le SEUL stockage que ce traceur ecrive, et il sert a NE PAS compter. Pose
+ * par la personne elle-meme via ?qm_ignore=1, il ne contient aucun
+ * identifiant et n'est jamais transmis. C'est ce qui le distingue d'un
+ * cookie d'identification ou de tracabilite, et ce qui le rend exempte.
+ */
+
+test('?qm_ignore=1 : aucun hit, et le marqueur est pose des deux cotes', function () {
+  var env = makeEnv({
+    location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+                pathname: '/', search: '?qm_ignore=1', hash: '' }
+  });
+  assert.strictEqual(env.sent.length, 0, 'la visite qui pose le marqueur ne se compte pas elle-meme');
+  assert.strictEqual(env.storage.qm_ignore, '1');
+  assert.strictEqual(env.cookies.qm_ignore, '1');
+});
+
+test('marqueur deja pose en cookie : aucun hit', function () {
+  var env = makeEnv({ cookies: { qm_ignore: '1' } });
+  assert.strictEqual(env.sent.length, 0);
+});
+
+test('marqueur deja pose en localStorage : aucun hit', function () {
+  var env = makeEnv({ storage: { qm_ignore: '1' } });
+  assert.strictEqual(env.sent.length, 0);
+});
+
+test('?qm_ignore=0 : le marqueur est retire et la visite recompte', function () {
+  var env = makeEnv({
+    cookies: { qm_ignore: '1' }, storage: { qm_ignore: '1' },
+    location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+                pathname: '/', search: '?qm_ignore=0', hash: '' }
+  });
+  assert.strictEqual(env.storage.qm_ignore, undefined);
+  assert.strictEqual(env.cookies.qm_ignore, undefined);
+  assert.strictEqual(env.sent.length, 1, 'qui revient sur sa decision est compte des cette visite');
+});
+
+test('le marqueur ne se confond pas avec un cookie voisin du site hote', function () {
+  var env = makeEnv({ cookies: { autre_qm_ignore: '1', qm_ignore_bis: '1' } });
+  assert.strictEqual(env.sent.length, 1, 'seul le nom exact vaut exclusion');
+});
+
+test('le marqueur n ecrase aucun cookie du site hote', function () {
+  var env = makeEnv({
+    cookies: { session: 'abc' },
+    location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+                pathname: '/', search: '?qm_ignore=1', hash: '' }
+  });
+  assert.strictEqual(env.cookies.session, 'abc');
+});
+
+test('localStorage indisponible (mode prive) : le cookie suffit', function () {
+  var env = makeEnv({ noStorage: true, cookies: { qm_ignore: '1' } });
   assert.strictEqual(env.sent.length, 0);
 });
 
