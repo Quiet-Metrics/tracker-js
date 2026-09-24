@@ -158,6 +158,38 @@ test('pageview initiale : payload k/t/u/r/l/w conforme a docs/05', function () {
   assert.strictEqual(hit.body.p, undefined);
 });
 
+test('u : seuls les parametres de campagne quittent la page', function () {
+  var env = makeEnv({ location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+    pathname: '/me-contacter', search: '?name=Jean&utm_source=nl&email=jean%40exemple.fr&ref=hn', hash: '' } });
+  assert.strictEqual(env.sent[0].body.u, 'https://monsite.fr/me-contacter?utm_source=nl&ref=hn');
+});
+
+test('u : parametre de campagne en premier, les suivants retires', function () {
+  var env = makeEnv({ location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+    pathname: '/p', search: '?utm_campaign=c&token=abc', hash: '' } });
+  assert.strictEqual(env.sent[0].body.u, 'https://monsite.fr/p?utm_campaign=c');
+});
+
+test('u : voisins de nom retires, aucun parametre garde = aucune requete', function () {
+  var env = makeEnv({ location: { protocol: 'https:', host: 'monsite.fr', hostname: 'monsite.fr',
+    pathname: '/p', search: '?referrer=x&utm_source_platform=y&utm_term=t', hash: '' } });
+  assert.strictEqual(env.sent[0].body.u, 'https://monsite.fr/p');
+});
+
+test('r : le referent se reduit a son origine', function () {
+  var env = makeEnv();
+  env.doc.referrer = 'https://monsite.fr/me-contacter?email=jean%40exemple.fr';
+  env.win.history.pushState({}, '', '/merci');
+  assert.strictEqual(env.sent[1].body.r, 'https://monsite.fr/');
+});
+
+test('r : absent quand le referent est vide', function () {
+  var env = makeEnv();
+  env.doc.referrer = '';
+  env.win.history.pushState({}, '', '/autre');
+  assert.strictEqual(env.sent[1].body.r, null);
+});
+
 test('data-endpoint prime sur la deduction depuis le src', function () {
   var env = makeEnv({ attrs: { 'data-endpoint': 'https://monsite.fr/wa-proxy.php' } });
   assert.strictEqual(env.sent[0].url, 'https://monsite.fr/wa-proxy.php');
@@ -285,13 +317,13 @@ test('repli XHR quand sendBeacon et fetch sont absents', function () {
 test('lien sortant : evenement auto sur clic externe, rien en interne', function () {
   var env = makeEnv();
   var handler = env.docListeners.click[0];
-  handler({ target: { tagName: 'A', href: 'https://ailleurs.fr/page',
-                      host: 'ailleurs.fr', parentElement: null } });
+  handler({ target: { tagName: 'A', href: 'https://ailleurs.fr/page?email=jean%40exemple.fr#x',
+                      protocol: 'https:', host: 'ailleurs.fr', pathname: '/page', parentElement: null } });
   assert.strictEqual(env.sent.length, 2);
   assert.strictEqual(env.sent[1].body.n, 'Lien sortant');
   assert.deepStrictEqual(env.sent[1].body.p, { url: 'https://ailleurs.fr/page' });
   handler({ target: { tagName: 'A', href: 'https://monsite.fr/interne',
-                      host: 'monsite.fr', parentElement: null } });
+                      protocol: 'https:', host: 'monsite.fr', pathname: '/interne', parentElement: null } });
   assert.strictEqual(env.sent.length, 2);
 });
 
@@ -306,15 +338,15 @@ test('telechargements : rien sans data-downloads', function () {
   var env = makeEnv();
   var handler = env.docListeners.click[0];
   handler({ target: { tagName: 'A', href: 'https://monsite.fr/guide.pdf',
-                      pathname: '/guide.pdf', host: 'monsite.fr', parentElement: null } });
+                      protocol: 'https:', pathname: '/guide.pdf', host: 'monsite.fr', parentElement: null } });
   assert.strictEqual(env.sent.length, 1, 'seule la page vue initiale');
 });
 
 test('telechargements : evenement auto quand data-downloads="true"', function () {
   var env = makeEnv({ attrs: { 'data-downloads': 'true' } });
   var handler = env.docListeners.click[0];
-  handler({ target: { tagName: 'A', href: 'https://monsite.fr/guide.pdf',
-                      pathname: '/guide.pdf', host: 'monsite.fr', parentElement: null } });
+  handler({ target: { tagName: 'A', href: 'https://monsite.fr/guide.pdf?token=abc',
+                      protocol: 'https:', pathname: '/guide.pdf', host: 'monsite.fr', parentElement: null } });
   assert.strictEqual(env.sent.length, 2);
   assert.strictEqual(env.sent[1].body.n, 'Téléchargement');
   assert.deepStrictEqual(env.sent[1].body.p, { url: 'https://monsite.fr/guide.pdf' });
@@ -324,7 +356,7 @@ test('telechargement externe : un seul evenement, jamais deux', function () {
   var env = makeEnv({ attrs: { 'data-downloads': 'true' } });
   var handler = env.docListeners.click[0];
   handler({ target: { tagName: 'A', href: 'https://ailleurs.fr/doc.zip',
-                      pathname: '/doc.zip', host: 'ailleurs.fr', parentElement: null } });
+                      protocol: 'https:', pathname: '/doc.zip', host: 'ailleurs.fr', parentElement: null } });
   assert.strictEqual(env.sent.length, 2, 'un clic = un evenement, pas deux');
   assert.strictEqual(env.sent[1].body.n, 'Téléchargement');
 });
@@ -333,7 +365,7 @@ test('telechargements : une page normale n\'est pas comptee comme telechargement
   var env = makeEnv({ attrs: { 'data-downloads': 'true' } });
   var handler = env.docListeners.click[0];
   handler({ target: { tagName: 'A', href: 'https://monsite.fr/tarifs',
-                      pathname: '/tarifs', host: 'monsite.fr', parentElement: null } });
+                      protocol: 'https:', pathname: '/tarifs', host: 'monsite.fr', parentElement: null } });
   assert.strictEqual(env.sent.length, 1);
 });
 
