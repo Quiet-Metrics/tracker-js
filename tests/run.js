@@ -12,7 +12,12 @@ var path = require('path');
 var vm = require('vm');
 var assert = require('assert');
 
-var SOURCE = fs.readFileSync(path.join(__dirname, '..', 'tracker.js'), 'utf8');
+var zlib = require('zlib');
+var servedCopy = require('../sync.js').servedCopy;
+
+var SOURCE_TEXT = fs.readFileSync(path.join(__dirname, '..', 'tracker.js'), 'utf8');
+var SERVED_TEXT = servedCopy(SOURCE_TEXT);
+var SOURCE = SOURCE_TEXT; // variante en cours, voir la boucle en fin de fichier
 
 /* -- Environnement navigateur simulé ---------------------------------- */
 
@@ -131,11 +136,9 @@ function makeEnv(options) {
   };
 }
 
-var passed = 0;
+var tests = [];
 function test(label, fn) {
-  fn();
-  passed++;
-  console.log('  ok - ' + label);
+  tests.push({ label: label, fn: fn });
 }
 
 /* -- Tests -------------------------------------------------------------- */
@@ -504,6 +507,33 @@ test('le cookie de visite n ecrase aucun cookie du site hote', function () {
 test('le cookie de visite ne se confond pas avec un cookie voisin', function () {
   var env = makeEnv({ cookies: { autre_qm_visit: '1', qm_visit_bis: '1' } });
   assert.strictEqual(env.sent[0].body.c, undefined, 'seul le nom exact vaut visite en cours');
+});
+
+/* -- Poids servi --------------------------------------------------------- */
+
+// Promesse publique : « moins de 4 Ko ». Mesurée sur la copie SERVIE, celle
+// que télécharge le visiteur, et non sur la source commentée.
+test('la copie servie pese moins de 4 000 octets gzip', function () {
+  var weight = zlib.gzipSync(Buffer.from(SERVED_TEXT, 'utf8'), { level: 9 }).length;
+  assert.ok(weight < 4000, 'copie servie : ' + weight + ' octets gzip');
+});
+
+test('la copie servie garde son en-tete de licence et perd les commentaires de bloc', function () {
+  assert.strictEqual(SERVED_TEXT.indexOf('/*!'), 0);
+  assert.strictEqual(SERVED_TEXT.indexOf('/* --'), -1);
+});
+
+/* -- Exécution : chaque test sur la source, puis sur la copie servie ------ */
+
+var passed = 0;
+[['source', SOURCE_TEXT], ['copie servie', SERVED_TEXT]].forEach(function (variant) {
+  SOURCE = variant[1];
+  console.log('\n' + variant[0]);
+  tests.forEach(function (t) {
+    t.fn();
+    passed++;
+    console.log('  ok - ' + t.label);
+  });
 });
 
 console.log('\n' + passed + ' tests OK');
