@@ -3,6 +3,15 @@
 All notable changes to the Quiet Metrics `qm.js` tracker are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org).
 
+## [0.4.0] - 2026-09-24
+
+### Changed
+- **Only what the platform reads leaves the page.** `u` keeps only the `utm_source`, `utm_medium`, `utm_campaign` and `ref` parameters (plus the fragment when `data-hash="true"`); `r` is reduced to its origin. A form submitted with GET, a token or an email address in the URL no longer leaves the browser. No figure changes: the platform discarded the rest.
+- The `url` property of the automatic `Lien sortant` and `Téléchargement` events drops its query string and fragment. These properties are stored; the platform now strips them on arrival as well, for older copies of the tracker.
+
+### Build
+- Served copies (`apps/platform/public/qm.js`, the WordPress plugin's `assets/qm.js`) are written by `sync.js` without the full-line block comments, the `/*!` license header excepted. The source keeps them. Served weight: 3 342 bytes gzipped (3 967 before), under the announced 4 KB. The Node harness runs the whole suite on the source and on the served copy, and guards the served weight.
+
 ## [0.3.0] - 2026-08-28
 
 ### Added
